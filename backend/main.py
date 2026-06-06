@@ -17,11 +17,10 @@ app = FastAPI(
     title="E-commerce web application",
     description="Cosmetics Online shopping",
     version="1.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
+    docs_url="/api/v1/docs",
+    redoc_url="/api/v1/redoc",
     debug=True,
 )
-# 54, 41 room door and entrance 52'
 
 app.add_middleware(
     CORSMiddleware,
