@@ -102,3 +102,6 @@ settings.local.py
 
 .Trashes
 ehthumbs.db
+
+prompt.txt
+format.txt

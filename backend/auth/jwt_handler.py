@@ -1,13 +1,21 @@
 from datetime import datetime, timedelta, timezone
 from typing import Any
-from fastapi import HTTPException, status
+from fastapi import HTTPException, status, Depends
 from jose import JWTError, jwt
 from core.config import settings 
+from core.Models import User 
 
 def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
     payload = data.copy()
     expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES))
     payload.update({"exp": expire, "type": "access"})
+
+    return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
+def create_password_reset_token(data: dict, expires_delta: timedelta | None = None) -> str:
+    payload = data.copy()
+    expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES))
+    payload.update({"exp": expire, "type": "password_reset"})
 
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
@@ -28,6 +36,13 @@ def decode_token(token: str) -> dict[str, Any]:
 def verify_access_token(token: str) -> dict:
     payload = decode_token(token)
     if payload.get("type") != "access":
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid access token")
+
+    return payload
+
+def verify_password_reset_token(token: str) -> dict:
+    payload = decode_token(token)
+    if payload.get("type") != "password_reset":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid access token")
 
     return payload
@@ -54,7 +69,6 @@ def get_user_email(payload: dict) -> str:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Email missing from token")
 
     return email
-
 
 def is_admin(payload: dict) -> bool:
     return payload.get("is_admin", False)

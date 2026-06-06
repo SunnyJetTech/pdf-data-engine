@@ -14,3 +14,9 @@ app/
 ├── uploads/
 │
 └── main.py
+FastAPI
+├── PostgreSQL
+├── MongoDB
+├── Redis
+├── Celery
+└── Next.js

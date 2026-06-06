@@ -221,3 +221,35 @@ class ColumnMetadata(Base):
         "UploadedFile",
         back_populates="columns"
     )
+    
+class PasswordResetToken(Base):
+    __tablename__ = "password_reset_tokens"
+
+    id = Column(Integer, primary_key=True)
+
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id")
+    )
+
+    token = Column(String(255))
+
+    expires_at = Column(DateTime)
+
+    used = Column(Boolean, default=False)
+    
+class EmailVerification(Base):
+    __tablename__ = "email_verifications"
+
+    id = Column(Integer, primary_key=True)
+
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id")
+    )
+
+    token = Column(String(255))
+
+    expires_at = Column(DateTime)
+
+    verified = Column(Boolean, default=False)
