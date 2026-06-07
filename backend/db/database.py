@@ -41,6 +41,6 @@ def get_db():
         db.close()
 
 def create_tables():
-    from core.Models import (User, Subscription, Payment, UploadedFile, ColumnMetadata)
+    from core.Models import (User, Subscription, Payment, UploadedFile, ColumnMetadata, Document, EmailVerification, PasswordResetToken)
 
     Base.metadata.create_all(bind=engine)

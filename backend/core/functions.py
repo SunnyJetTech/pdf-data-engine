@@ -1,29 +1,50 @@
 import pdfplumber
 import pandas as pd
-from typing import BinaryIO, Any
+from typing import BinaryIO, Callable, Awaitable
 from fastapi import (Request, Depends, HTTPException, status)
 from sqlalchemy.orm import Session
 from db.database import get_db
 from core.Models import User
 from auth.jwt_handler import decode_token
-from db.database import DBConnection
+import pandas as pd
+import pdfplumber
+from db.mongo_db import mongodb
 
-def extract_pdf_table(pdf_source: str | BinaryIO) -> pd.DataFrame:
+async def extract_pdf_table(pdf_source: str | BinaryIO, has_header: bool = True, progress_callback: Callable[[int, int], Awaitable[None]] | None = None) -> pd.DataFrame:
     records: list[list[str]] = []
+    headers: list[str] | None = None
     max_cols = 0
 
     with pdfplumber.open(pdf_source) as pdf:
         total_pages = len(pdf.pages)
-
         for page_no, page in enumerate(pdf.pages, start=1):
+
             print(f"Processing page {page_no}/{total_pages}")
+
+            if progress_callback:
+                await progress_callback(page_no, total_pages)
+
             tables = page.extract_tables()
+
+            if not tables:
+                continue
 
             for table in tables:
                 if not table:
                     continue
 
-                for row in table:
+                if has_header and headers is None:
+                    header_row = table[0]
+
+                    headers = [str(cell).strip() if cell is not None else f"Column{i + 1}" for i, cell in enumerate(header_row)]
+                    max_cols = len(headers)
+                    print(f"Detected headers: {headers}")
+
+                    data_rows = table[1:]
+                else:
+                    data_rows = table
+
+                for row in data_rows:
                     clean_row = [str(cell).strip() if cell is not None else "" for cell in row]
 
                     max_cols = max(max_cols, len(clean_row))
@@ -36,7 +57,14 @@ def extract_pdf_table(pdf_source: str | BinaryIO) -> pd.DataFrame:
         while len(row) < max_cols:
             row.append("")
 
-    columns = [f"Column{i}" for i in range(1, max_cols + 1)]
+    if headers:
+        while len(headers) < max_cols:
+            headers.append(f"Column{len(headers) + 1}")
+
+        columns = headers
+
+    else:
+        columns = [f"Column{i}" for i in range(1, max_cols + 1)]
 
     return pd.DataFrame(records, columns=columns)
 
@@ -49,6 +77,7 @@ def process_headers(df: pd.DataFrame, has_header: int):
     if has_header == 0:
         for col in df.columns:
             display_columns[col] = col
+            
         return df, display_columns
 
     first_row = df.iloc[0]
@@ -69,8 +98,14 @@ def save_to_excel(df: pd.DataFrame, excel_file: str):
     df.to_excel(excel_file, index=False)
     print(f"Saved Excel: {excel_file}")
 
-def save_to_database(df: pd.DataFrame, session: Session, table_name: str):
-    df.to_sql(table_name, session.bind, if_exists="replace", index=False)
+def save_to_mongodb(df: pd.DataFrame, collection_name: str) -> None:
+    collection = mongodb[collection_name]
+    collection.delete_many({})
+
+    records = (df.fillna("").to_dict(orient="records"))
+
+    if records:
+        collection.insert_many(records)
 
 def save_metadata(display_columns: dict, session: Session, table_name: str):
     metadata_df = pd.DataFrame([
