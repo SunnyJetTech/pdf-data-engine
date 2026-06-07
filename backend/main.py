@@ -1,9 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from core.config import settings 
-from routers import user_router
+from routers import user_router, document_router, pdf_router
 from db.database import create_tables
-from db.mongo_db import mongo_db
+from db.mongo_db import mongodb
 import logging
 
 logging.basicConfig(
@@ -12,7 +12,7 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger("app")
-
+# create_tables()
 app = FastAPI(
     title="E-commerce web application",
     description="Cosmetics Online shopping",
@@ -31,6 +31,8 @@ app.add_middleware(
 )
 
 app.include_router(user_router.router, prefix=settings.API_PREFIX)
+app.include_router(document_router.router, prefix=settings.API_PREFIX)
+app.include_router(pdf_router.router, prefix=settings.API_PREFIX)
 
 if __name__ == "__main__":
     import uvicorn
