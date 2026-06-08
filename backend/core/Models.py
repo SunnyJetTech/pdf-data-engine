@@ -29,17 +29,6 @@ class Subscription(Base):
     expiry_date = Column(DateTime)
     user = relationship("User", back_populates="subscriptions")
 
-class Payment(Base):
-    __tablename__ = "payments"
-
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey("users.id"))
-    amount = Column(String(50))
-    currency = Column(String(10), default="NGN")
-    reference = Column(String(255), unique=True)
-    status = Column(String(50))
-    created_at = Column(DateTime, default=datetime.utcnow)
-
 class UploadedFile(Base):
     __tablename__ = "uploaded_files"
 
@@ -106,4 +95,5 @@ class Payment(Base):
     currency = Column(String(10), default='NGN')
     reference = Column(String(255), unique=True)
     status = Column(String(50), default='pending')
+    plan_name = Column(String(100))
     created_at = Column(DateTime, default=datetime.utcnow)
