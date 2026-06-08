@@ -110,7 +110,7 @@ def login(user_data: LoginInputSchema, response: Response, db = Depends(get_db))
     if not user or not verify_password(user_data.password, user.password_hash):
         return APIResponse(status='failed', message="Invalid credentials", data={"email": user_data.email, "password": ''})
     
-    token = create_access_token({'email': user.email, 'user_id':user.id, 'username': user.username})
+    token = create_access_token({'email': user.email, 'user_id':user.id, 'username': user.username, "is_admin": user.is_admin})
     response.set_cookie(
         key='access_token',
         value = token,

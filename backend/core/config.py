@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     MAIL_FROM_NAME: str
     MAIL_STARTTLS: bool = True
     MAIL_SSL_TLS: bool = False
+    
+    PAYSTACK_SECRET_KEY: str
+    PAYSTACK_PUBLIC_KEY: str
+    PAYSTACK_CALLBACK_URL: str
 
     @property
     def allowed_origins_list(self) -> list[str]:
