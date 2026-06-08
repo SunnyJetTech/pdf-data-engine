@@ -202,7 +202,7 @@ def get_documents(user_id: int, current_user: User = Depends(get_current_user_fr
         ]
     )
     
-@router.delete('/document/{document_id}/detail', response_model=APIResponse)
+@router.delete('/document/{document_id}/delete', response_model=APIResponse)
 def delete_document(document_id: int, current_user: User = Depends(get_current_user_from_cookie), db: Session = Depends(get_db)):
     if not check_admin_permission_required(current_user):
         return APIResponse(

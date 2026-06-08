@@ -1,5 +1,7 @@
 import requests
 from core.config import settings
+import hmac
+import hashlib
 
 BASE_URL = "https://api.paystack.co"
 
@@ -36,3 +38,15 @@ def verify_payment(reference: str):
     
     return response.json()
 
+def verify_paystack_signature(payload: bytes, signature: str) -> bool:
+    computed_signature = hmac.new(
+        settings.PAYSTACK_SECRET_KEY,
+        payload,
+        hashlib.sha512
+    ).hexdigest()
+    
+    return hmac.compare_digest(
+        computed_signature,
+        signature
+    )
+    
