@@ -16,10 +16,11 @@ router = APIRouter(
 @router.post("/initialize")
 def initialize_subscription_payment(sub_amount: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_from_cookie)):
     reference = str(uuid.uuid4())
+    amount = sub_amount * 100
     
     payment = Payment(
         user_id=current_user.id,
-        amount=sub_amount,
+        amount=amount,
         reference=reference,
         status="pending"
     )
