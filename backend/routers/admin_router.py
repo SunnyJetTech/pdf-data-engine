@@ -48,7 +48,8 @@ def get_users(current_user: User = Depends(get_current_user_from_cookie),  db: S
                 "id": user.id,
                 "username": user.username,
                 "email": user.email,
-                "is_acitve": user.is_active
+                "is_acitve": user.is_active,
+                "is_admin": user.is_admin
             }
             
             for user in users
@@ -202,7 +203,7 @@ def get_documents(user_id: int, current_user: User = Depends(get_current_user_fr
         ]
     )
     
-@router.delete('/document/{document_id}/delete', response_model=APIResponse)
+@router.delete('/documents/{document_id}/delete', response_model=APIResponse)
 def delete_document(document_id: int, current_user: User = Depends(get_current_user_from_cookie), db: Session = Depends(get_db)):
     if not check_admin_permission_required(current_user):
         return APIResponse(

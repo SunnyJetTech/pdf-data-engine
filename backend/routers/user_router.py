@@ -131,7 +131,7 @@ def login(user_data: LoginInputSchema, response: Response, db = Depends(get_db))
     
     return APIResponse(
         status='success',
-        message='Loggedin successfully',
+        message='Loggedin successfully', 
         data = data
     )
     
