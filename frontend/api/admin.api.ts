@@ -1,39 +1,76 @@
-import apiClient from "@/lib/axios";
+import { apiClient } from "@/lib/axios"
 import { ApiResponse } from "@/types/api.types"
-import { UserResponse, DocumentResponse } from "@/types/admin.types"
+import {UserResponse, DocumentResponse, DashboardStats, SubscriptionResponse,} from "@/types/admin.types"
+
+export async function getDashboardStats() {
+  const response =await apiClient.get<ApiResponse<DashboardStats>>("/admin/dashboard")
+
+  return response.data
+}
 
 export async function getUsers() {
-    const response = await apiClient.get<ApiResponse<UserResponse[]>>("/admin/users")
+  const response = await apiClient.get<ApiResponse<UserResponse[]>>("/admin/users")
 
-    return response.data
+  return response.data
 }
 
 export async function getUser(id: number) {
-    const response = await apiClient.get<ApiResponse<UserResponse>>(`/admin/users/${id}`)
+  const response = await apiClient.get<ApiResponse<UserResponse>>(`/admin/users/${id}`)
 
-    return response.data
+  return response.data
 }
 
-export async function deleterUser(id: number) {
-    const response = await apiClient.delete<ApiResponse>(`/admin/users/${id}/delete`)
+export async function deleteUser(id: number) {
+  const response = await apiClient.delete<ApiResponse>(`/admin/users/${id}/delete`)
 
-    return response.data
+  return response.data
 }
 
 export async function getDocuments() {
-    const response = await apiClient.get<ApiResponse<DocumentResponse[]>>("/admin/documents")
+  const response = await apiClient.get<ApiResponse<DocumentResponse[]>>("/admin/documents")
 
-    return response.data
+  return response.data
 }
 
-export async function getSingleDocument(user_id: number) {
-    const response = await apiClient.get<ApiResponse<DocumentResponse[]>>(`/admin/documents/${user_id}`)
+export async function deleteDocument(documentId: number) {
+  const response = await apiClient.delete<ApiResponse>(`/admin/documents/${documentId}/delete`)
 
-    return response.data
+  return response.data
 }
 
-export async function deleteDocument(document_id: number) {
-    const response = await apiClient.delete<ApiResponse>(`/admin/documents/${document_id}/delete`)
+export async function getSubscriptions() {
+  const response = await apiClient.get<ApiResponse<SubscriptionResponse[]>>("/admin/subscriptions")
 
-    return response.data
+  return response.data
 }
+
+export async function cancelSubscription(subscriptionId: number) {
+  const response = await apiClient.post<ApiResponse>(`/admin/subscriptions/${subscriptionId}/cancel`)
+
+  return response.data
+}
+
+export async function getRevenueAnalytics() {
+  const response = await apiClient.get("/admin/analytics/revenue")
+
+  return response.data
+}
+
+export async function getUserGrowthAnalytics() {
+  const response = await apiClient.get("/admin/analytics/users")
+
+  return response.data
+}
+
+export async function getUploadAnalytics() {
+  const response = await apiClient.get("/admin/analytics/uploads")
+
+  return response.data
+}
+
+export async function getSearchAnalytics() {
+  const response = await apiClient.get("/admin/analytics/searches")
+
+  return response.data
+}
+

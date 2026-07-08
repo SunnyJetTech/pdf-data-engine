@@ -6,7 +6,6 @@ engine = create_engine(settings.POSTGRES_DATABASE_URL, echo=settings.DEBUG, futu
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 Base = declarative_base()
 
-
 class DBConnection:
 
     def __init__(self, auto_commit: bool = True):
@@ -41,16 +40,16 @@ def get_db():
         db.close()
 
 def create_tables():
-    from core.Models import (
+    from core.models import (
         User, 
         Subscription, 
         Payment, 
-        UploadedFile, 
-        ColumnMetadata, 
         Document, 
-        EmailVerification, 
-        PasswordResetToken,
-        Payment
+        Payment,
+        SearchHistory,
+        Activity,
+        PricingPlan,
+        Quota,
     )
 
-    Base.metadata.create_all(bind=engine)
+    Base.metadata.create_all(bind=engine) 

@@ -1,14 +1,5 @@
-from pydantic import BaseModel
-from typing import List
+from pydantic import BaseModel, EmailStr
 
-class APIResponse(BaseModel):
-    status: str
-    message: str
-    data: List | None = None
-    
-class UsersOutputSchema(APIResponse):
-    data: List | None = None
-    
-class UpdateUserDataInputSchema(BaseModel):
-    email: str
-    data: object
+class UpdateUserRequest(BaseModel):
+    email: EmailStr
+    data: dict

@@ -11,7 +11,7 @@ class SearchOperator(str, Enum):
     GTE = ">="
     LTE = "<="
 
-class SearchDocumentRequest(BaseModel):
+class SearchRequest(BaseModel):
     document_id: int
     column: str
     operator: SearchOperator
