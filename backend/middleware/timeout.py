@@ -1,0 +1,32 @@
+import asyncio
+from starlette.responses import JSONResponse
+
+class TimeoutMiddleware:
+
+    def __init__(self, app, timeout: int = 180):
+        self.app = app
+        self.timeout = timeout
+
+    async def __call__(self, scope, receive, send):
+
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        try:
+            await asyncio.wait_for(
+                self.app(scope, receive, send),
+                timeout=self.timeout,
+            )
+
+        except TimeoutError:
+
+            response = JSONResponse(
+                status_code=408,
+                content={
+                    "status": "failed",
+                    "message": "Request timeout.",
+                },
+            )
+
+            await response(scope, receive, send)

@@ -13,8 +13,8 @@ export interface ApiError {
 export interface RegisterRequest {
   email: string;
   username: string;
-  confirm_password: string;
   password: string;
+  confirm_password: string;
 }
 
 export interface LoginRequest {
@@ -22,10 +22,17 @@ export interface LoginRequest {
   password: string;
 }
 
+export interface ResetPasswordRequest {
+  password: string
+  confirmPassword: string
+}
 export interface ChangePasswordRequest {
   password: string;
   new_password: string;
-  confirm_new_password: string
+  confirm_new_password: string;
+}
+export interface ForgotPasswordRequest {
+  email: string
 }
 
 export interface LoginResponse {

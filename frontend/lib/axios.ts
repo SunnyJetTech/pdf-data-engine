@@ -1,12 +1,48 @@
-import axios from "axios"
+import axios from "axios";
+import { store } from "@/store";
+import { clearUser } from "@/store/slices/authSlice";
 
-const apiClient = axios.create({
-    baseURL: process.env.BASE_URL || "http://localhost:8002/api/v1",
+export const apiClient = axios.create({
+    baseURL:
+      process.env.NEXT_PUBLIC_API_URL,
     withCredentials: true,
-    timeout: 30000,
-    headers: {
-        "Content-Type":"application/json",
-    }
-})
+  });
 
-export default apiClient
+apiClient.interceptors.response.use(
+  (response) => response,
+
+  (error) => {
+    const status = error?.response?.status;
+
+    if (status === 401) {
+      store.dispatch(
+        clearUser()
+      );
+
+      const path = window.location.pathname;
+
+      const authPages = [
+        "/login",
+        "/register",
+        "/forgot-password",
+        "/reset-password",
+      ];
+
+      const isAuthPage = authPages.some((page) =>
+          path.startsWith(page)
+        );
+
+      if (!isAuthPage) {
+        window.location.replace(
+          "/login"
+        );
+      }
+    }
+
+    return Promise.reject(
+      error
+    );
+  }
+);
+
+export default apiClient;
