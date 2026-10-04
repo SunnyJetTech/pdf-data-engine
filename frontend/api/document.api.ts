@@ -1,32 +1,38 @@
 import { apiClient } from "@/lib/axios";
-import {ApiResponse, Documents, SearchDocumentRequest, SearchDocumentResponse,} from "@/types/api.types";
+import {ApiResponse, Documents, DocumentStats} from "@/types/api.types";
 
-export async function getAllDocuments() {
-    const response = await apiClient.get<ApiResponse<Documents[]>>('/documents')
+export const getAllDocuments = async () => {
+  const { data } = await apiClient.get<ApiResponse<Documents[]>>("/documents");
 
-    return response.data
-}
+  return data;
+};
 
-export async function getSingleDocument(document_id: number) { 
-    const response = await apiClient.get<ApiResponse<Documents>>(`/documents/${document_id}`)
+export const getSingleDocument = async (documentId: number) => {
+  const { data } = await apiClient.get<ApiResponse<Documents>>(`/documents/${documentId}`);
 
-    return response.data
-}
+  return data;
+};
 
-export async function SearchDocument(payload: SearchDocumentRequest) {
-  const response = await apiClient.post<SearchDocumentResponse>("/documents/search", payload)
+export const getDocumentColumns = async (documentId: number) => {
+  const { data } = await apiClient.get<ApiResponse<string[]>>(`/documents/${documentId}/columns`);
 
-  return response.data
-}
+  return data;
+};
 
-export async function SearchColumn(documentId: number) {
-  const response = await apiClient.get<ApiResponse<string[]>>(`/documents/${documentId}/columns`)
+export const getDocumentSample = async (documentId: number) => {
+  const { data } = await apiClient.get<ApiResponse>(`/documents/${documentId}/sample`);
 
-  return response.data
-}
+  return data;
+};
 
-export async function deleteDocument(document_id: number) {
-    const response = await apiClient.delete<ApiResponse>(`/documents/${document_id}/delete`)
+export const getDocumentStatistics = async (documentId: number) => {
+  const { data } = await apiClient.get<ApiResponse<DocumentStats>>(`/documents/${documentId}/stats`);
 
-    return response.data
-}
+  return data;
+};
+
+export const deleteDocument = async (documentId: number) => {
+  const { data } = await apiClient.delete<ApiResponse>(`/documents/${documentId}`);
+
+  return data;
+};

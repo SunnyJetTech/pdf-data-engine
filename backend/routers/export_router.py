@@ -1,42 +1,32 @@
-from fastapi import APIRouter, Depends
-from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session
-from db.database import get_db
+from __future__ import annotations
+from uuid import UUID
+from fastapi import APIRouter, Depends, HTTPException, status
 from core.auth import get_current_user_from_cookie
-from core.models import User
-from schema.export_schema import ExportRequest
-from services.export_service import ExportService
+from core.dependencies.export import get_export_service
+from core.models.user import User
+from schemas.export_schema import ExportRequest, ExportResponse
+from services.dataset.export_service import ExportService
 
 router = APIRouter(
     prefix="/export",
     tags=["Export"],
 )
 
-@router.post("/csv")
-def export_csv(payload: ExportRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_from_cookie)):
+@router.post("", response_model=ExportResponse, status_code=status.HTTP_200_OK)
+async def export_dataset(
+    request: ExportRequest,
+    service: ExportService = Depends(get_export_service),
+    current_user: User = Depends(get_current_user_from_cookie),
+):
 
-    file, filename = ExportService.export_csv(db=db, user=current_user, payload=payload)
+    return await service.export(user=current_user, request=request)
 
-    return StreamingResponse(
-        iter([file.getvalue()]),
-        media_type="text/csv",
-        headers={
-            "Content-Disposition":
-            f'attachment; filename="{filename}"'
-        },
-    )
+@router.post("/dataset/{dataset_id}", response_model=ExportResponse)
+async def export_entire_dataset(
+    dataset_id: UUID,
+    format: str,
+    service: ExportService = Depends(get_export_service),
+    current_user: User = Depends(get_current_user_from_cookie),
+):
 
-
-@router.post("/excel")
-def export_excel(payload: ExportRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_from_cookie)):
-
-    file, filename = ExportService.export_excel(db=db, user=current_user, payload=payload)
-
-    return StreamingResponse(
-        file,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={
-            "Content-Disposition":
-            f'attachment; filename="{filename}"'
-        },
-    )
+    return await service.export_dataset(user=current_user, dataset_id=dataset_id, format=format)

@@ -1,70 +1,62 @@
-from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
-from db.database import get_db
+from __future__ import annotations
+from uuid import UUID
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from core.auth import get_current_user_from_cookie
-from core.models import User
-from schema.response_schema import APIResponse
-from schema.document_schema import DocumentResponse, DocumentStatsResponse
+from core.dependencies.dataset import get_dataset_service
+from core.dependencies.document import get_document_service
+from core.models.user import User
+from schemas.document_schema import DocumentResponse
+from services.dataset_service import DatasetService
 from services.document_service import DocumentService
-from core.responses_builder import success
 
 router = APIRouter(
     prefix="/documents",
     tags=["Documents"],
 )
 
+def _ensure_dataset_access(*, dataset_service: DatasetService, current_user: User, dataset_id: UUID):
+    dataset = dataset_service.get(dataset_id)
 
-@router.get("/", response_model=APIResponse)
-def get_documents(db: Session = Depends(get_db), current_user: User = Depends(get_current_user_from_cookie)):
-    documents = DocumentService.get_user_documents(db=db, user_id=current_user.id)
+    if dataset.tenant_id != current_user.tenant_id:
+        raise HTTPException( status_code=status.HTTP_403_FORBIDDEN, detail="Dataset does not belong to your workspace.")
 
-    return success(
-        data=[DocumentService.serialize(doc) for doc in documents],
-        message="Documents retrieved successfully.",
-    )
+    return dataset
 
+def _get_document_for_user(*, document_service: DocumentService, current_user: User, document_id: UUID):
+    document = document_service.get(document_id)
 
-@router.get("/{document_id}", response_model=APIResponse)
-def get_document(document_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_from_cookie)):
-    document = DocumentService.get_document(db=db, user_id=current_user.id, document_id=document_id)
+    if document.dataset.tenant_id != current_user.tenant_id:
+        raise HTTPException( status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
 
-    return success(
-        data=DocumentService.serialize(document),
-        message="Document retrieved successfully.",
-    )
+    return document
 
+@router.get("/dataset/{dataset_id}", response_model=list[DocumentResponse])
+def list_documents(
+    dataset_id: UUID,
+    dataset_service: DatasetService = Depends(get_dataset_service),
+    document_service: DocumentService = Depends(get_document_service),
+    current_user: User = Depends(get_current_user_from_cookie),
+):
+    dataset = _ensure_dataset_access(dataset_service=dataset_service, current_user=current_user, dataset_id=dataset_id)
 
-@router.get("/{document_id}/columns", response_model=APIResponse)
-def get_columns(document_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_from_cookie)):
-    columns = DocumentService.get_columns(db=db, user_id=current_user.id, document_id=document_id)
+    return document_service.by_dataset(dataset.id)
 
-    return success(
-        data=columns,
-        message="Columns retrieved successfully.",
-    )
+@router.get("/{document_id}", response_model=DocumentResponse)
+def get_document(
+    document_id: UUID,
+    document_service: DocumentService = Depends(get_document_service),
+    current_user: User = Depends(get_current_user_from_cookie),
+):
+    return _get_document_for_user(document_service=document_service, current_user=current_user, document_id=document_id)
 
-@router.get("/{document_id}/sample", response_model=APIResponse)
-def get_sample(document_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_from_cookie)):
-    sample = DocumentService.get_sample(db=db, user_id=current_user.id, document_id=document_id)
+@router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_document(
+    document_id: UUID,
+    document_service: DocumentService = Depends(get_document_service),
+    current_user: User = Depends(get_current_user_from_cookie),
+):
+    document = _get_document_for_user(document_service=document_service, current_user=current_user, document_id=document_id)
 
-    return success(
-        data=sample,
-        message="Sample retrieved successfully.",
-    )
+    document_service.delete(document=document, actor_id=current_user.id)
 
-@router.get("/{document_id}/stats", response_model=APIResponse)
-def get_statistics(document_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_from_cookie)):
-    stats = DocumentService.get_statistics(db=db, user_id=current_user.id, document_id=document_id)
-
-    return success(
-        data=stats,
-        message="Statistics retrieved successfully.",
-    )
-
-@router.delete("/{document_id}", response_model=APIResponse)
-def delete_document(document_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_from_cookie)):
-    DocumentService.delete(db=db, user_id=current_user.id, document_id=document_id)
-
-    return success(
-        message="Document deleted successfully.",
-    )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

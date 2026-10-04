@@ -1,94 +1,112 @@
 from __future__ import annotations
-from typing import Any
-from pymongo.collection import Collection
+from uuid import UUID
+from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
-from db.mongo_db import mongodb
+from core.constants.activity import ActivityAction
+from core.constants.document_status import DocumentStatus
+from core.models.dataset import Dataset
 from core.models.document import Document
-from core.exceptions import DocumentNotFound
+from repositories.document_repository import DocumentRepository
+from services.base_service import BaseService
+from services.dataset_service import DatasetService
+from services.usage_service import UsageService
 
+class DocumentService(BaseService):
 
-class DocumentService:
+    def __init__(self, db: Session) -> None:
+        super().__init__(db)
 
-    @staticmethod
-    def get_document(*, db: Session, user_id: int, document_id: int) -> Document:
+        self.documents = DocumentRepository(db)
+        self.datasets = DatasetService(db)
+        self.usage = UsageService(db)
 
-        document = db.query(Document).filter(Document.id == document_id, Document.user_id == user_id).first()
+    def get(self, document_id: UUID) -> Document:
+        document = self.documents.by_id(document_id)
 
-        if not document:
-            raise DocumentNotFound()
+        if document is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found.")
 
         return document
 
-    @staticmethod
-    def get_user_documents(*, db: Session, user_id: int) -> list[Document]:
+    def by_dataset(self, dataset_id: UUID) -> list[Document]:
+        return self.documents.by_dataset(dataset_id=dataset_id)
 
-        return db.query(Document).filter(Document.user_id == user_id).order_by(Document.created_at.desc()).all()
+    def by_creator(self, user_id: UUID) -> list[Document]:
+        return self.documents.by_user(user_id=user_id)
 
-    @staticmethod
-    def get_collection(document: Document) -> Collection:
+    def create(self, *, dataset: Dataset, uploaded_by: UUID, **data) -> Document:
+        if not self.usage.require_document(dataset.tenant_id):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Document quota exceeded.")
 
-        return mongodb[document.mongo_collection]
+        document = Document(dataset_id=dataset.id, uploaded_by=uploaded_by, status=DocumentStatus.PENDING, **data)
 
-    @classmethod
-    def get_columns(cls, *, db: Session, user_id: int, document_id: int) -> list[str]:
+        self.documents.add(document)
+        self.usage.record_document( tenant_id=dataset.tenant_id)
 
-        document = cls.get_document(db=db, user_id=user_id, document_id=document_id)
+        self.db.commit()
+        self.db.refresh(document)
 
-        collection = cls.get_collection(document)
+        self._refresh_dataset(dataset)
+        self._log_created( actor_id=uploaded_by, document=document)
 
-        first_row = collection.find_one({}, {"_id": 0})
+        return document
 
-        if not first_row:
-            return []
+    def mark_processing(self, document: Document) -> Document:
+        self.documents.update(document, status=DocumentStatus.PROCESSING)
 
-        return list(first_row.keys())
-    
-    @classmethod
-    def get_sample(cls, *, db: Session, user_id: int, document_id: int) -> dict[str, Any]:
+        return self.commit_refresh(document)
 
-        document = cls.get_document(db=db, user_id=user_id, document_id=document_id)
+    def mark_ready( self, *, document: Document, rows: int, columns: int) -> Document:
+        self.documents.update(document, status=DocumentStatus.READY, rows_count=rows, columns_count=columns)
 
-        collection = cls.get_collection(document)
+        self.db.commit()
+        self.db.refresh(document)
 
-        return collection.find_one({}, {"_id": 0}) or {}
-    
-    @classmethod
-    def get_statistics(cls, *, db: Session, user_id: int, document_id: int) -> dict[str, Any]:
+        self._refresh_dataset(document.dataset)
 
-        document = cls.get_document(db=db, user_id=user_id, document_id=document_id)
+        return document
 
-        collection = cls.get_collection(document)
+    def mark_failed(self, *, document: Document, error: str) -> Document:
+        self.documents.update(document, status=DocumentStatus.FAILED, error_message=error)
 
-        return {
-            "rows": collection.count_documents({}),
-            "columns": document.columns_count,
-            "uploaded": document.created_at,
-        }
+        self.db.commit()
+        self.db.refresh(document)
 
-    @staticmethod
-    def delete(*, db: Session, document: Document) -> None:
+        return document
 
-        mongodb.drop_collection(document.mongo_collection)
+    def delete(self, *, document: Document, actor_id: UUID) -> None:
+        dataset = document.dataset
 
-        db.delete(document)
-        db.commit()
 
-    @staticmethod
-    def serialize(document: Document) -> dict[str, Any]:
+        self.db.commit()
 
-        return {
-            "id": document.id,
-            "filename": document.filename,
-            "mongo_collection": document.mongo_collection,
-            "rows": document.rows_count,
-            "columns": document.columns_count,
-            "created_at": document.created_at,
-        }
+        self._refresh_dataset(dataset)
+        self._log_deleted(actor_id=actor_id, dataset_id=dataset.id, document_id=document.id)
 
-    @classmethod
-    def serialize_many(cls, documents: list[Document]) -> list[dict[str, Any]]:
+    def _refresh_dataset(self, dataset: Dataset) -> None:
+        documents = self.documents.by_dataset(dataset_id=dataset.id)
 
-        return [
-            cls.serialize(document)
-            for document in documents
-        ]
+        rows = sum(document.rows_count or 0 for document in documents)
+        columns = max((document.columns_count or 0 for document in documents), default=0)
+
+        self.datasets.update_statistics(dataset=dataset, documents_count=len(documents), rows_count=rows, columns_count=columns)
+
+    def _log_created(self, *, actor_id: UUID, document: Document) -> None:
+        self.activity.log(
+            actor_id=actor_id,
+            tenant_id=document.dataset.tenant_id,
+            action=ActivityAction.DOCUMENT_CREATED,
+            target_type="document",
+            target_id=document.id,
+        )
+
+    def _log_deleted(self, *, actor_id: UUID, dataset_id: UUID, document_id: UUID) -> None:
+        dataset = self.datasets.get(dataset_id)
+
+        self.activity.log(
+            actor_id=actor_id,
+            tenant_id=dataset.tenant_id,
+            action=ActivityAction.DOCUMENT_DELETED,
+            target_type="document",
+            target_id=document_id,
+        )

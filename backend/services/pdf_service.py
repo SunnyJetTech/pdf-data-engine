@@ -1,121 +1,79 @@
 from fastapi import UploadFile
 from sqlalchemy.orm import Session
-from core.models import User, Document
-from core.naming import generate_collection_name
-from core.utils.dataframe import save_to_excel
-from core.utils.mongodb import save_to_mongodb
-from core.utils.pdf import extract_pdf_table
+from core.constants.file_constants import SaveMode
+from core.models import User
 from core.validators import validate_file_size
 from core.websocket import manager
-from services.document_service import DocumentService
+from core.utils.pdf import extract_pdf_table
+from services.dataset_service import DatasetService
+from backend.services.search.export_service import ExportService
 from services.usage_service import UsageService
 
 class PDFService:
 
     @staticmethod
-    async def upload(*,db: Session, file: UploadFile, current_user: User,client_id: str, has_header: bool, save_mode):
+    async def upload(
+        *,
+        db: Session,
+        file: UploadFile,
+        current_user: User,
+        client_id: str,
+        has_header: bool,
+        save_mode: SaveMode,
+        dataset_id: int | None = None,
+        dataset_name: str | None = None,
+    ):
 
-        if file.content_type != "application/pdf":
-            raise ValueError("Unsupported file format.")
+        PDFService._validate_file(file)
 
         UsageService.check_document_limit(db=db, user=current_user)
 
         await validate_file_size(file=file, max_size_mb=20)
 
-        df = await extract_pdf_table(
+        dataframe = await extract_pdf_table(
             pdf_source=file.file,
             has_header=has_header,
-            progress_callback=lambda current, total:
-                manager.send_progress(
-                    client_id,
-                    current,
-                    total,
-                ),
+            progress_callback=lambda current, total: manager.send_progress(
+                client_id,
+                current,
+                total,
+            ),
         )
 
-        UsageService.check_row_limit(
-            len(df)
-        )
+        UsageService.check_row_limit(len(dataframe))
 
         await manager.send(
             client_id,
             {
                 "status": "processing_complete",
-                "rows": len(df),
-                "columns": len(df.columns),
+                "rows": len(dataframe),
+                "columns": len(dataframe.columns),
             },
         )
 
-        if save_mode.value == "excel":
-            return await PDFService._save_excel(
-                df=df,
-                file=file,
-                client_id=client_id,
-            )
+        if save_mode == SaveMode.EXCEL:
 
-        if save_mode.value == "database":
-            return await PDFService._save_database(
+            return await ExportService.export_excel(dataframe=dataframe, filename=file.filename, client_id=client_id)
+
+        if save_mode == SaveMode.DATABASE:
+
+            return await DatasetService.upload(
                 db=db,
-                df=df,
-                file=file,
+                dataframe=dataframe,
+                filename=file.filename,
                 current_user=current_user,
                 client_id=client_id,
+                dataset_id=dataset_id,
+                dataset_name=dataset_name,
             )
 
         return {
-            "rows": len(df),
-            "columns": len(df.columns),
+            "rows": len(dataframe),
+            "columns": len(dataframe.columns),
         }
 
     @staticmethod
-    async def _save_excel(
-        *,
-        df,
-        file: UploadFile,
-        client_id: str,
-    ):
-        excel_name = (
-            file.filename.replace(".pdf", ".xlsx")
-        )
+    def _validate_file(file: UploadFile):
 
-        save_to_excel(
-            df=df,
-            excel_file=excel_name,
-        )
-
-        await manager.send(
-            client_id,
-            {
-                "status": "saved_to_excel",
-                "file": excel_name,
-            },
-        )
-
-        return {
-            "rows": len(df),
-            "columns": len(df.columns),
-            "file": excel_name,
-        }
-
-    @staticmethod
-    async def _save_database(*, db: Session, df, file: UploadFile, current_user: User, client_id: str,):
-        collection_name = generate_collection_name(file.filename)
-
-        save_to_mongodb(dataframe=df, collection_name=collection_name)
-
-        document = Document(user_id=current_user.id, filename=file.filename, mongo_collection=collection_name, rows_count=len(df), columns_count=len(df.columns))
-
-        db.add(document)
-        db.commit()
-        db.refresh(document)
-
-        UsageService.increment_upload_usage(db=db, user=current_user)
-
-        await manager.send(client_id,
-            {
-                "status": "saved_to_database",
-                "collection": collection_name,
-            },
-        )
-
-        return DocumentService.serialize(document)
+        if file.content_type != "application/pdf":
+            raise ValueError("Unsupported file format.")

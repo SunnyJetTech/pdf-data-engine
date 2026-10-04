@@ -3,8 +3,7 @@ from fastapi_mail import ConnectionConfig, FastMail, MessageSchema
 from core.config import settings
 
 class MailService:
-
-    conf = ConnectionConfig(
+    _config = ConnectionConfig(
         MAIL_USERNAME=settings.MAIL_USERNAME,
         MAIL_PASSWORD=settings.MAIL_PASSWORD,
         MAIL_FROM=settings.MAIL_FROM,
@@ -17,11 +16,7 @@ class MailService:
     )
 
     @classmethod
-    async def send(cls, *, recipient: str, subject: str, body: str,) -> None:
-        """
-        Send an HTML email.
-        """
-
+    async def send(cls, *, recipient: str, subject: str, body: str) -> None:
         message = MessageSchema(
             subject=subject,
             recipients=[recipient],
@@ -29,58 +24,52 @@ class MailService:
             subtype="html",
         )
 
-        fm = FastMail(cls.conf)
-
-        await fm.send_message(message)
+        mailer = FastMail(cls._config)
+        await mailer.send_message(message)
 
     @classmethod
-    async def send_verification_email(cls, *, recipient: str, username: str, verification_url: str):
+    async def send_verification_email(cls, *, recipient: str, username: str, verification_url: str) -> None:
         body = f"""
-            <h2>Hello {username}</h2>
+        <h2>Hello {username}</h2>
 
-            <p>Welcome to PDF Search.</p>
+        <p>Welcome to DataSage.</p>
 
-            <p>Please verify your email address by clicking below.</p>
+        <p>Please verify your email address by clicking below.</p>
 
+        <p>
             <a href="{verification_url}">Verify Email</a>
+        </p>
         """
 
-        await cls.send(
-            recipient=recipient,
-            subject="Verify your email",
-            body=body,
-        )
+        await cls.send(recipient=recipient, subject="Verify your email", body=body)
 
     @classmethod
-    async def send_password_reset_email(cls, *, recipient: str, username: str, reset_url: str):
+    async def send_password_reset_email(cls, *, recipient: str, username: str, reset_url: str) -> None:
         body = f"""
-            <h2>Hello {username}</h2>
+        <h2>Hello {username}</h2>
 
-            <p>Click below to reset your password.</p>
+        <p>Click below to reset your password.</p>
 
+        <p>
             <a href="{reset_url}">Reset Password</a>
+        </p>
         """
 
-        await cls.send(
-            recipient=recipient,
-            subject="Password Reset",
-            body=body,
-        )
+        await cls.send(recipient=recipient, subject="Password Reset", body=body)
 
     @classmethod
-    async def send_payment_success_email(cls, *, recipient: str, username: str, plan_name: str,):
+    async def send_payment_success_email(cls, *, recipient: str, username: str, plan_name: str) -> None:
         body = f"""
-            <h2>Hello {username}</h2>
+        <h2>Hello {username}</h2>
 
-            <p>Your payment was successful.</p>
+        <p>Your payment was successful.</p>
 
-            <p>Your <b>{plan_name}</b> subscription has been activated.</p>
+        <p>
+            Your <strong>{plan_name}</strong> subscription
+            has been activated.
+        </p>
 
-            <p>Thank you for your purchase.</p>
+        <p>Thank you for your purchase.</p>
         """
 
-        await cls.send(
-            recipient=recipient,
-            subject="Subscription Activated",
-            body=body,
-        )
+        await cls.send(recipient=recipient, subject="Subscription Activated", body=body)

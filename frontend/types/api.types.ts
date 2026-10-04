@@ -1,3 +1,39 @@
+export interface ExportRequest {
+    document_id: number;
+    export_all: boolean;
+    column?: string;
+    operator?: string;
+    value?: string;
+}
+
+export interface PricingPlan {
+  id: number;
+  name: string;
+  amount: number;
+  duration_days: number;
+}
+
+export interface CheckoutResponse {
+  plan: string;
+  amount: number;
+  authorization_url: string;
+  reference: string;
+}
+
+export interface UploadResponse {
+  rows: number;
+  columns: number;
+  file?: string;
+  collection?: string;
+}
+
+export interface Subscription {
+  id: number;
+  plan_name: string;
+  is_active: boolean;
+  start_date: string;
+  expiry_date: string;
+}
 
 export interface ApiResponse<T = unknown> {
   status: string;
@@ -5,9 +41,40 @@ export interface ApiResponse<T = unknown> {
   data: T | null;
 }
 
+export interface DocumentStats {
+  rows: number;
+  columns: number;
+  created_at?: string;
+}
+
 export interface ApiError {
   message: string;
   statusCode?: number;
+}
+
+export interface SearchRequest {
+  document_id: number;
+  column: string;
+  operator: string;
+  value: string;
+  page: number;
+  page_size: number;
+}
+
+export interface SearchResponse {
+  total: number;
+  page: number;
+  page_size: number;
+  results: Record<string, unknown>[];
+}
+
+export interface SearchHistory {
+  id: number;
+  document_id: number;
+  column: string;
+  operator: string;
+  value: string;
+  created_at: string;
 }
 
 export interface RegisterRequest {
@@ -35,7 +102,7 @@ export interface ForgotPasswordRequest {
   email: string
 }
 
-export interface LoginResponse {
+export interface AuthResponse {
   user_id: number;
   username: string;
   email: string;

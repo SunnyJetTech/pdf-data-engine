@@ -1,0 +1,14 @@
+It would include:
+
+Vision
+Architecture
+Folder structure
+Database schema
+Backend roadmap
+Frontend roadmap
+API conventions
+Coding standards
+Future features
+Deployment plan
+Monetization plan
+SaaS roadmap

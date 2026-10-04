@@ -1,67 +1,53 @@
 import { apiClient } from "@/lib/axios";
-import { 
-  ApiResponse, 
-  LoginResponse, 
+import {
+  ApiResponse,
+  AuthResponse,
   LoginRequest,
   RegisterRequest,
   ChangePasswordRequest,
-  CurrentUser,
   ForgotPasswordRequest,
-  ResetPasswordRequest
+  ResetPasswordRequest,
+  CurrentUser,
 } from "@/types/api.types";
 
-export async function loginUser(payload: LoginRequest) {
-  const response = await apiClient.post<ApiResponse<LoginResponse>>("/user/login", payload);
-  
-  return response.data;
-}
+export const loginUser = async (payload: LoginRequest) => {
+  const { data } = await apiClient.post<ApiResponse<AuthResponse>>( "/user/login", payload);
 
-export async function registerUser(payload: RegisterRequest) {
-  const response = await apiClient.post<ApiResponse>("/user/register", payload);
+  return data;
+};
 
-  return response.data
-}
+export const registerUser = async (payload: RegisterRequest) => {
+  const { data } = await apiClient.post<ApiResponse>("/user/register", payload);
 
-export async function logoutUser() {
-  const response = await apiClient.post("/user/logout")
+  return data;
+};
 
-  return response.data
-}
+export const logoutUser = async () => {
+  const { data } = await apiClient.post<ApiResponse>("/user/logout");
 
-export async function changePassword(payload: ChangePasswordRequest) {
-  const response = await apiClient.post<ApiResponse>("/user/change-password", payload)
-  
-  return response.data
-}
+  return data;
+};
 
-export async function forgotPassword(payload: ForgotPasswordRequest) {
-  const response = await apiClient.post<ApiResponse>("/user/change-password", payload)
-  
-  return response.data
-}
+export const getCurrentUser = async () => {
+  const { data } = await apiClient.get<ApiResponse<CurrentUser>>("/user/me");
 
-export async function resetPassword(token: string, payload: ResetPasswordRequest) {
-  const response = await apiClient.post<ApiResponse>(`/user/reset-password/${token}`, payload)
+  return data;
+};
 
-  return response.data
-}
+export const changePassword = async (payload: ChangePasswordRequest) => {
+  const { data } = await apiClient.post<ApiResponse>("/user/change-password", payload);
 
-export async function getCurrentUser() {
-  const response =
-    await apiClient.get<ApiResponse<CurrentUser>>("/user/me")
+  return data;
+};
 
-  return response.data
-}
+export const forgotPassword = async (payload: ForgotPasswordRequest) => {
+  const { data } = await apiClient.post<ApiResponse>("/user/forgot-password", payload);
 
-export async function getMe() {
-  const res = await apiClient.get("/user/me")
-  
-  return res.data
-}
+  return data;
+};
 
-export async function getProfile() {
-  const response = await apiClient.get<ApiResponse<LoginResponse>>("/user/profile")
+export const resetPassword = async (token: string, payload: ResetPasswordRequest) => {
+  const { data } = await apiClient.post<ApiResponse>(`/user/reset-password/${token}`, payload);
 
-  return response.data
-}
-
+  return data;
+};
