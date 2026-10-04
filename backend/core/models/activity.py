@@ -1,18 +1,31 @@
 from __future__ import annotations
-from datetime import datetime
-from sqlalchemy import DateTime, ForeignKey, Integer, String
+import uuid
+from typing import TYPE_CHECKING
+from sqlalchemy import ForeignKey, Index, JSON, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from db.database import Base
+from core.models.base import BaseModel
 
-class Activity(Base):
+if TYPE_CHECKING:
+    from core.models.document import Document
+    from core.models.tenant import Tenant
+    from core.models.user import User
+
+class Activity(BaseModel):
     __tablename__ = "activities"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    document_id: Mapped[int | None] = mapped_column(ForeignKey("documents.id", ondelete="SET NULL"), nullable=True)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    document_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("documents.id", ondelete="SET NULL"), nullable=True, index=True)
     action: Mapped[str] = mapped_column(String(100), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow,)
-
-    user = relationship("User", back_populates="activities")
-    document = relationship("Document", back_populates="activities")
+    resource: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    metadata: Mapped[dict] = mapped_column(JSON,default=dict, nullable=False)
     
+    tenant: Mapped["Tenant"] = relationship(back_populates="activities")
+    user: Mapped["User"] = relationship(back_populates="activities")
+    document: Mapped["Document"] = relationship(back_populates="activities")
+
+    __table_args__ = (
+        Index("ix_activity_tenant_created", "tenant_id", "created_at"),
+        Index("ix_activity_user_created", "user_id", "created_at"),
+        Index("ix_activity_action", "action")
+    )

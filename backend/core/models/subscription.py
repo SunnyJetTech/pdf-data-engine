@@ -1,35 +1,28 @@
-from datetime import datetime
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String
-from sqlalchemy.orm import relationship
-from db.database import Base
+from __future__ import annotations
+import uuid
+from typing import TYPE_CHECKING
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from core.constants.subscription import SubscriptionStatus
+from core.models.base import BaseModel
 from datetime import datetime
 
-class Subscription(Base):
+if TYPE_CHECKING:
+    from .tenant import Tenant
+    from .pricing_plan import PricingPlan
+    from .payment import Payment
+
+class Subscription(BaseModel):
     __tablename__ = "subscriptions"
 
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey("users.id"))
-    plan_id = Column(Integer, ForeignKey("pricing_plans.id"))
-    is_active = Column(Boolean, default=True)
-    start_date = Column(DateTime, default=datetime.utcnow)
-    expiry_date = Column(DateTime)
-
-    user = relationship("User", back_populates="subscriptions")
-    plan = relationship("PricingPlan")
- 
-class PricingPlan(Base):
-    __tablename__ = "pricing_plans"
-
-    id = Column(Integer, primary_key=True)
-    name = Column(String(100), unique=True, nullable=False)
-    description = Column(String(255))
-    amount = Column(Integer, nullable=False)  # amount in kobo
-    currency = Column(String(10), default="NGN")
-    duration_days = Column(Integer, nullable=False, default=30)
-    uploads_limit = Column(Integer, nullable=False)
-    searches_limit = Column(Integer, nullable=False)
-    max_file_size_mb = Column(Integer, nullable=False)
-    priority_processing = Column(Boolean, default=False)
-    api_access = Column(Boolean, default=False)
-    active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    plan_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("pricing_plans.id", ondelete="RESTRICT"), nullable=False)
+    status: Mapped[SubscriptionStatus] = mapped_column(Enum(SubscriptionStatus), default=SubscriptionStatus.ACTIVE, nullable=False)
+    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    auto_renew: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    
+    tenant: Mapped["Tenant"] = relationship(back_populates="subscriptions")
+    plan: Mapped["PricingPlan"] = relationship(back_populates="subscriptions")
+    payments: Mapped[list["Payment"]] = relationship(back_populates="subscription")
+    

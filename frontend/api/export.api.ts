@@ -1,13 +1,14 @@
-import { apiClient } from "@/lib/axios"
+import { apiClient } from "@/lib/axios";
+import { ExportRequest } from "@/types/api.types";
 
-export async function exportCsv(payload: any) {
-  const res = await apiClient.post("/documents/export/csv", payload, {responseType: "blob",})
+export const exportCsv = async (payload: ExportRequest) => {
+  const { data } = await apiClient.post("/export/csv", payload, { responseType: "blob"});
 
-  return res.data
-}
+  return data;
+};
 
-export async function exportExcel(payload: any) {
-  const res = await apiClient.post("/documents/export/excel", payload, {responseType: "blob",})
+export const exportExcel = async (payload: ExportRequest) => {
+  const { data } = await apiClient.post("/export/excel", payload, { responseType: "blob" });
 
-  return res.data
-}
+  return data;
+};

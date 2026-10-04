@@ -1,0 +1,7 @@
+from core.enums.ai import AIProvider, AIModel
+
+DEFAULT_PROVIDER = AIProvider.OPENAI
+DEFAULT_MODEL = AIModel.GPT_5
+AI_CONTEXT_MESSAGES = 10
+AI_MAX_TOKENS = 4000
+AI_TEMPERATURE = 0.2

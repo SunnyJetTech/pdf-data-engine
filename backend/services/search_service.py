@@ -1,79 +1,80 @@
+from __future__ import annotations
+from uuid import UUID
+from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
-from core.models import SearchHistory
-from core.search.query_builder import build_query
-from services.document_service import DocumentService
+from core.constants.activity import ActivityAction
+from core.models.search import SavedSearch, SearchHistory
+from repositories.saved_search_repository import SavedSearchRepository
+from repositories.search_history_repository import SearchHistoryRepository
+from services.base_service import BaseService
+from services.retrieval_service import RetrievalService
 
-class SearchService:
+class SearchService(BaseService):
+    def __init__(self, db: Session):
+        super().__init__(db)
 
-    @classmethod
-    def search(cls, *, db: Session, user_id: int, payload) -> dict:
+        self.history_repository = SearchHistoryRepository(db)
+        self.saved_repository = SavedSearchRepository(db)
+        self.retrieval = RetrievalService()
 
-        document = DocumentService.get_document(db=db, user_id=user_id, document_id=payload.document_id)
+    async def search(self, *, user_id: UUID, dataset_id: UUID, query: str, limit: int = 20) -> dict:
+        self.record_history(user_id=user_id, dataset_id=dataset_id, query=query)
 
-        collection = DocumentService.get_collection(document)
-
-        query = build_query(payload.column, payload.operator, payload.value)
-
-        total = collection.count_documents(query)
-
-        skip = (payload.page - 1) * payload.page_size
-
-        rows = list(
-            collection.find(
-                query,
-                {"_id": 0},
-            )
-            .skip(skip)
-            .limit(payload.page_size)
-        )
-
-        cls.save_history(db=db,user_id=user_id,document_id=document.id,column=payload.column,operator=payload.operator,value=payload.value)
+        results = await self.retrieval.retrieve_with_metadata(dataset_id=dataset_id, question=query, limit=limit)
 
         return {
-            "total": total,
-            "page": payload.page,
-            "page_size": payload.page_size,
-            "results": rows,
+            "query": query,
+            "count": len(results),
+            "results": results,
         }
 
-    @staticmethod
-    def save_history(*, db: Session, user_id: int, document_id: int, column: str, operator: str, value: str) -> SearchHistory:
+    async def retrieve_context(self, *, dataset_id: UUID, query: str, limit: int = 8) -> list[str]:
 
-        history = SearchHistory(user_id=user_id, document_id=document_id, column_name=column, operator=operator, search_value=value)
+        return await self.retrieval.retrieve_context( dataset_id=dataset_id, question=query, limit=limit)
+    
+    def record_history(self, *, user_id: UUID, dataset_id: UUID, query: str) -> SearchHistory:
+        history = SearchHistory( user_id=user_id, dataset_id=dataset_id, query=query)
 
-        db.add(history)
-        db.commit()
-        db.refresh(history)
+        self.history_repository.add(history)
+        self.commit_refresh(history)
+        self.activity.log(actor_id=user_id, action=ActivityAction.SEARCH_PERFORMED, target_type="dataset", target_id=dataset_id)
 
         return history
 
-    @staticmethod
-    def get_history(*, db: Session, user_id: int, limit: int = 20) -> list[SearchHistory]:
+    def history_for_user(self, *, user_id: UUID) -> list[SearchHistory]:
 
-        return (
-            db.query(SearchHistory)
-            .filter(SearchHistory.user_id == user_id)
-            .order_by(SearchHistory.created_at.desc())
-            .limit(limit)
-            .all()
-        )
+        return self.history_repository.recent(user_id=user_id)
 
-    @staticmethod
-    def serialize_history(history: SearchHistory) -> dict:
+    def clear_history(self, *, user_id: UUID) -> int:
+        deleted = self.history_repository.delete_by_user(user_id=user_id)
 
-        return {
-            "id": history.id,
-            "document_id": history.document_id,
-            "column_name": history.column_name,
-            "operator": history.operator,
-            "search_value": history.search_value,
-            "created_at": history.created_at,
-        }
+        self.commit()
 
-    @classmethod
-    def serialize_history_many(cls, histories: list[SearchHistory]) -> list[dict]:
+        return deleted
 
-        return [
-            cls.serialize_history(item)
-            for item in histories
-        ]
+    def save_search(self, *, user_id: UUID, dataset_id: UUID, name: str, query: str) -> SavedSearch:
+
+        if self.saved_repository.by_name(user_id=user_id, name=name):
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Saved search already exists.")
+
+        search = SavedSearch(user_id=user_id, dataset_id=dataset_id, name=name, query=query)
+
+        self.saved_repository.add(search)
+        self.commit_refresh(search)
+
+        return search
+
+    def saved_searches(self, *, user_id: UUID) -> list[SavedSearch]:
+
+        return self.saved_repository.by_user(user_id=user_id)
+
+    def delete_saved_search(self, *, search_id: UUID) -> None:
+
+        search = self.saved_repository.by_id(search_id)
+
+        if search is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Saved search not found.")
+
+        self.saved_repository.delete(search)
+
+        self.commit()

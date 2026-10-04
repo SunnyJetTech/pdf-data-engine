@@ -8,28 +8,19 @@ def get_current_user_from_cookie(request: Request, db: Session = Depends(get_db)
     token = request.cookies.get("access_token")
 
     if not token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing authentication token",
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing authentication token")
 
     payload = decode_token(token)
 
     user_id = payload.get("user_id")
 
     if not user_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token",
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
     user = db.query(User).filter(User.id == user_id).first()
 
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
     return user
 
@@ -43,10 +34,7 @@ def user_required(current_user: User = Depends(get_current_user_from_cookie),):
     return current_user
 
 def admin_required(current_user: User = Depends(get_current_user_from_cookie)):
-    if not current_user.is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Forbidden: Admin access required.",
-        )
+    if not current_user.is_superuser:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden: Admin access required.")
 
     return current_user

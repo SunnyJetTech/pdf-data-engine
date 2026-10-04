@@ -1,112 +1,107 @@
 from __future__ import annotations
-import json
-import uuid
+from uuid import UUID
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
-from core.constants.activity import ActivityAction
-from core.models import Payment, User
-from services.activity_service import ActivityService
-from services.mail_service import MailService
-from services.paystack_service import PaystackService
-from services.subscription_service import SubscriptionService
+from core.constants.payment import PaymentProvider, PaymentStatus
+from core.models.payment import Payment
+from core.models.pricing_plan import PricingPlan
+from core.models.tenant import Tenant
+from repositories.payment_repository import PaymentRepository
+from services.subscription.subscription_service import SubscriptionService
 
 class PaymentService:
+    def __init__(self, db: Session) -> None:
+        self.db = db
 
-    @classmethod
-    def initialize(cls, *, db: Session, user: User, amount: int, plan_name: str) -> dict:
+        self.payments = PaymentRepository(db)
+        self.subscriptions = SubscriptionService(db)
 
-        reference = str(uuid.uuid4())
+    def by_id(self, payment_id: UUID) -> Payment:
+        payment = self.payments.by_id(payment_id)
 
-        payment = Payment(user_id=user.id, amount=amount, reference=reference, status="pending")
+        if payment is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Payment not found.")
 
-        db.add(payment)
-        db.commit()
-        db.refresh(payment)
+        return payment
 
-        ActivityService.log(db=db, user_id=user.id, action=ActivityAction.PAYMENT_INITIALIZED)
+    def by_reference(self, reference: str) -> Payment:
+        payment = self.payments.by_reference(reference)
 
-        return PaystackService.initialize_payment(
-            email=user.email,
-            amount=amount,
+        if payment is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Payment not found.")
+
+        return payment
+
+    def latest(self, tenant_id: UUID) -> Payment | None:
+        return self.payments.latest(tenant_id)
+
+    def history(self, tenant_id: UUID) -> list[Payment]:
+        return self.payments.by_tenant(tenant_id)
+
+    def pending(self) -> list[Payment]:
+        return self.payments.pending()
+
+    def create(self, *, tenant: Tenant, plan: PricingPlan, provider: PaymentProvider, reference: str) -> Payment:
+
+        if self.payments.exists_reference(reference):
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Duplicate payment reference.")
+
+        payment = Payment(
+            tenant_id=tenant.id,
+            amount=plan.amount,
+            currency=plan.currency,
+            provider=provider,
             reference=reference,
-            metadata={
-                "user_id": user.id,
-                "plan_name": plan_name,
-            },
+            status=PaymentStatus.PENDING,
         )
 
-    @classmethod
-    def verify(cls, *, db: Session, reference: str) -> dict:
+        self.payments.add(payment)
+        self.db.commit()
+        self.db.refresh(payment)
 
-        payment = db.query(Payment).filter(Payment.reference == reference).first()
+        return payment
 
-        if not payment:
-            raise HTTPException(status_code=404, detail="Payment not found.")
+    def mark_success(self, *, payment: Payment, transaction_id: str) -> Payment:
+        self.payments.mark_success( payment, transaction_id=transaction_id)
 
-        result = PaystackService.verify_payment(reference)
+        self.db.commit()
+        self.db.refresh(payment)
 
-        if (result["status"] and result["data"]["status"] == "success"):
+        return payment
 
-            if payment.status != "success":
+    def mark_failed(self, *, payment: Payment) -> Payment:
+        self.payments.mark_failed(payment)
 
-                payment.status = "success"
+        self.db.commit()
+        self.db.refresh(payment)
 
-                SubscriptionService.activate(db=db, user_id=payment.user_id, plan_name="Premium")
+        return payment
 
-                ActivityService.log(db=db, user_id=payment.user_id, action=ActivityAction.PAYMENT_SUCCESS)
+    def cancel(self, payment: Payment) -> Payment:
+        self.payments.mark_cancelled(payment)
 
-                db.commit()
+        self.db.commit()
+        self.db.refresh(payment)
 
-            return {
-                "verified": True,
-                "reference": payment.reference,
-            }
+        return payment
 
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Payment verification failed.",
-        )
+    def verify_success(self, *, payment: Payment, transaction_id: str, plan: PricingPlan) -> Payment:
+        if payment.status == PaymentStatus.SUCCESS:
+            return payment
 
-    @classmethod
-    async def process_webhook(cls, *, db: Session, payload: bytes, signature: str) -> dict:
+        self.payments.mark_success(payment, transaction_id=transaction_id)
+        subscription = self.subscriptions.current(payment.tenant_id)
 
-        if not PaystackService.verify_signature(payload=payload, signature=signature,):
-            raise HTTPException(
-                status_code=400,
-                detail="Invalid Paystack signature.",
-            )
+        self.subscriptions.change_plan(subscription=subscription, plan=plan)
+        payment.subscription_id = subscription.id
 
-        event = json.loads(payload)
+        self.db.commit()
+        self.db.refresh(payment)
 
-        if event.get("event") != "charge.success":
-            return {
-                "status": "ignored",
-            }
+        return payment
 
-        payment_data = event["data"]
+    def total_successful_amount(self, tenant_id: UUID) -> int:
+        return self.payments.total_successful_amount(tenant_id)
 
-        reference = payment_data["reference"]
-
-        payment = db.query(Payment).filter(Payment.reference == reference).first()
-
-        if not payment:
-            return {
-                "status": "payment_not_found",
-            }
-
-        if payment.status == "success":
-            return {
-                "status": "already_processed",
-            }
-
-        payment.status = "success"
-
-        SubscriptionService.activate(db=db, user_id=payment.user_id, plan_name="Premium")
-
-        ActivityService.log(db=db, user_id=payment.user_id, action=ActivityAction.PAYMENT_SUCCESS)
-
-        db.commit()
-
-        return {
-            "status": "success",
-        }
+    def successful_count(self, tenant_id: UUID) -> int:
+        return self.payments.count_successful(tenant_id)

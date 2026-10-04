@@ -1,6 +1,5 @@
 from typing import Optional
 from sqlalchemy.orm import Session
-from core.constants.activity import ActivityAction
 from core.models import Activity
 
 class ActivityService:

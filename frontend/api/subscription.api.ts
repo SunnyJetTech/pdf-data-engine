@@ -1,14 +1,20 @@
 import { apiClient } from "@/lib/axios";
-import { ApiResponse } from "@/types/api.types";
+import {ApiResponse, Subscription, PricingPlan, CheckoutResponse} from "@/types/api.types";
 
-export async function getSubscription() {
-  const response = await apiClient.get<ApiResponse<any>>("/subscriptions/me");
+export const getPlans = async () => {
+  const { data } = await apiClient.get<ApiResponse<PricingPlan[]>>("/subscriptions/plans");
 
-  return response.data;
-}
+  return data;
+};
 
-export async function createCheckout(plan: string) {
-  const response = await apiClient.post<ApiResponse<any>>("/subscriptions/checkout", {plan,});
+export const getSubscription = async () => {
+  const { data } = await apiClient.get<ApiResponse<Subscription | null>>("/subscriptions/me");
 
-  return response.data;
-}
+  return data;
+};
+
+export const createCheckout = async (plan: string) => {
+  const { data } = await apiClient.post<ApiResponse<CheckoutResponse>>( "/subscriptions/checkout", null, {params: {plan,},});
+
+  return data;
+};

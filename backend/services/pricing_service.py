@@ -1,91 +1,128 @@
 from __future__ import annotations
+from uuid import UUID
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
-from core.models import PricingPlan
-from schema.pricing_schema import PricingCreate, PricingUpdate
+from core.models.pricing_plan import PricingPlan
+from repositories.pricing_plan_repository import PricingPlanRepository
 
 class PricingService:
+    def __init__(self, db: Session) -> None:
+        self.db = db
+        self.plans = PricingPlanRepository(db)
 
-    @staticmethod
-    def all(db: Session) -> list[PricingPlan]:
-        return db.query(PricingPlan).order_by(PricingPlan.amount).all()
+    def get(self, plan_id: UUID) -> PricingPlan:
+        plan = self.plans.by_id(plan_id)
 
-    @staticmethod
-    def public(db: Session) -> list[PricingPlan]:
-        return db.query(PricingPlan).filter(PricingPlan.active.is_(True)).order_by(PricingPlan.amount).all()
-
-    @staticmethod
-    def get(db: Session, pricing_id: int) -> PricingPlan:
-
-        plan = db.query(PricingPlan).filter(PricingPlan.id == pricing_id).first()
-
-        if not plan:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Pricing plan not found",
-            )
+        if plan is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pricing plan not found.")
 
         return plan
 
-    @classmethod
-    def create(cls, db: Session, payload: PricingCreate) -> PricingPlan:
+    def free_plan(self) -> PricingPlan:
+        plan = self.plans.free_plan()
 
-        existing = db.query(PricingPlan).filter(PricingPlan.name == payload.name).first()
-
-        if existing:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Pricing plan already exists",
-            )
-
-        plan = PricingPlan(**payload.model_dump())
-
-        db.add(plan)
-        db.commit()
-        db.refresh(plan)
+        if plan is None:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Default pricing plan is not configured.")
 
         return plan
 
-    @classmethod
-    def update(cls, db: Session, pricing_id: int, payload: PricingUpdate) -> PricingPlan:
+    def active_plans(self) -> list[PricingPlan]:
 
-        plan = cls.get(db=db, pricing_id=pricing_id)
+        return self.plans.active()
 
-        updates = payload.model_dump(exclude_unset=True)
+    def all(self) -> list[PricingPlan]:
 
-        for field, value in updates.items():
-            setattr(plan, field, value)
+        return self.plans.list()
 
-        db.commit()
-        db.refresh(plan)
+    def create(self, **data) -> PricingPlan:
+        if self.plans.by_name(name=data["name"]):
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Pricing plan already exists.")
+
+        self._validate(data)
+        plan = PricingPlan(**data)
+        self.plans.add(plan)
+        self.db.commit()
+        self.db.refresh(plan)
 
         return plan
 
-    @classmethod
-    def delete(cls, db: Session, pricing_id: int,) -> None:
+    def update(self, plan: PricingPlan, **changes) -> PricingPlan:
+        self._validate(changes)
 
-        plan = cls.get(db=db, pricing_id=pricing_id)
+        for key, value in changes.items():
+            setattr(plan, key, value)
 
-        db.delete(plan)
-        db.commit()
+        self.db.commit()
+        self.db.refresh(plan)
+
+        return plan
+
+    def activate(self, plan: PricingPlan) -> PricingPlan:
+        plan.active = True
+        self.db.commit()
+        self.db.refresh(plan)
+
+        return plan
+
+    def deactivate(self, plan: PricingPlan) -> PricingPlan:
+        plan.active = False
+        self.db.commit()
+        self.db.refresh(plan)
+
+        return plan
+
+    def delete(self, plan: PricingPlan) -> None:
+        self.plans.delete(plan)
+        self.db.commit()
+
+    @staticmethod
+    def _validate(values: dict) -> None:
+
+        integer_fields = [
+            "amount",
+            "duration_days",
+            "datasets_limit",
+            "documents_limit",
+            "searches_limit",
+            "chat_messages_limit",
+            "exports_limit",
+            "storage_limit_mb",
+            "ai_tokens_limit",
+        ]
+
+        for field in integer_fields:
+            if field not in values:
+                continue
+
+            value = values[field]
+
+            if value is None:
+                continue
+
+            if value < 0:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"{field} cannot be negative.")
 
     @staticmethod
     def serialize(plan: PricingPlan) -> dict:
 
         return {
-            "id": plan.id,
+            "id": str(plan.id),
             "name": plan.name,
-            "amount": plan.amount,
             "description": plan.description,
+            "amount": plan.amount,
+            "currency": plan.currency,
+            "duration_days": plan.duration_days,
+            "datasets_limit": plan.datasets_limit,
+            "documents_limit": plan.documents_limit,
+            "searches_limit": plan.searches_limit,
+            "chat_messages_limit": plan.chat_messages_limit,
+            "exports_limit": plan.exports_limit,
+            "storage_limit_mb": plan.storage_limit_mb,
+            "ai_tokens_limit": plan.ai_tokens_limit,
             "active": plan.active,
-            "created_at": plan.created_at,
         }
 
     @classmethod
     def serialize_many(cls, plans: list[PricingPlan]) -> list[dict]:
 
-        return [
-            cls.serialize(plan)
-            for plan in plans
-        ]
-        
+        return [cls.serialize(plan) for plan in plans]

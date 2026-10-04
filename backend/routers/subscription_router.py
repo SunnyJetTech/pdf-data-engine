@@ -5,8 +5,8 @@ from core.auth import get_current_user_from_cookie
 from core.models import User
 from core.responses_builder import success, failed
 from schema.response_schema import APIResponse
-from services.subscription_service import SubscriptionService
-from services.paystack_service import PaystackService
+from backend.services.subscription.subscription_service import SubscriptionService
+from backend.services.payment.paystack_service import PaystackService
 
 router = APIRouter(
     prefix="/subscriptions",

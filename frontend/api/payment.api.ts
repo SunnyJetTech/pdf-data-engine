@@ -1,7 +1,5 @@
 import { apiClient } from "@/lib/axios";
-import { 
-    ApiResponse, 
-} from "@/types/api.types";
+import { ApiResponse} from "@/types/api.types";
 
 export async function initialpayment(amount: number) {
     const response = await apiClient.post<ApiResponse>('/payments/initialize', amount)

@@ -1,34 +1,26 @@
 import { ProgressMessage } from "@/types/websocket-types";
 
-export class PDFWebsocket {
-    private socket: WebSocket | null = null
+class PDFWebSocket {
 
-    connect(clientId: string, onMessage: (data: ProgressMessage) => void) {
-        const baseUrl = process.env.NEXT_PUBLIC_WS_URL
+  private socket: WebSocket | null = null;
 
-        this.socket = new WebSocket(`${baseUrl}/pdf/progress/${clientId}`)
-        this.socket.onopen = () => {
-            console.log("Websocket Connected")
-        }
+  connect(clientId: string, onMessage: (message: ProgressMessage) => void) {
 
-        this.socket.onmessage = (event) => {
-            const data: ProgressMessage = JSON.parse(event.data)
+    if (this.socket) {this.socket.close();}
 
-            onMessage(data)
-        }
+    const base = process.env.NEXT_PUBLIC_WS_URL;
 
-        this.socket.onerror = (error) => {
-            console.log(error)
-        }
+    this.socket = new WebSocket(`${base}/api/v1/pdf/progress/${clientId}`);
 
-        this.socket.onclose = (error) => {
-            console.log(error)
-        }
-    }
+    this.socket.onopen = () => console.log("WebSocket connected");
 
-    disconnect() {
-        this.socket?.close()
-    }
+    this.socket.onmessage = (event) => onMessage(JSON.parse(event.data));
+
+    this.socket.onerror = console.error;
+
+    this.socket.onclose = () => console.log("WebSocket disconnected");}
+
+  disconnect() { this.socket?.close(); this.socket = null;}
 }
 
-export const pdfWebSocket = new PDFWebsocket()
+export const pdfWebSocket = new PDFWebSocket();
