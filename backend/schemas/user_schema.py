@@ -1,50 +1,20 @@
-from pydantic import BaseModel, EmailStr, model_validator
-
-class ForgotPasswordRequest(BaseModel):
-    email: EmailStr
-class UserOut(BaseModel):
-    id: int
-    username: str
-    email: EmailStr
-    is_active: bool
-    is_admin: bool
-
-class UserRegister(BaseModel):
-    username: str
-    email: EmailStr
-    password: str
-    confirm_password: str
-
-    @model_validator(mode="after")
-    def validate_password(self):
-        if self.password != self.confirm_password:
-            raise ValueError("Passwords do not match")
-
-        return self
+from __future__ import annotations
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 class LoginRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     email: EmailStr
-    password: str
+    password: str = Field(min_length=1)
 
 class ChangePasswordRequest(BaseModel):
-    current_password: str
-    new_password: str
-    confirm_password: str
+    model_config = ConfigDict(extra="forbid")
+    current_password: str = Field(min_length=1)
+    new_password: str = Field(min_length=8)
 
-    @model_validator(mode="after")
-    def validate_password(self):
-        if self.new_password != self.confirm_password:
-            raise ValueError("Passwords do not match")
-
-        return self
+class ForgotPasswordRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    email: EmailStr
 
 class ResetPasswordRequest(BaseModel):
-    password: str
-    confirm_password: str
-
-    @model_validator(mode="after")
-    def validate_password(self):
-        if self.password != self.confirm_password:
-            raise ValueError("Passwords do not match")
-
-        return self
+    model_config = ConfigDict(extra="forbid")
+    new_password: str = Field(min_length=8)

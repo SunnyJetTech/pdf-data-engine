@@ -6,10 +6,11 @@ from core.constants.activity import ActivityAction
 from core.constants.document_status import DocumentStatus
 from core.models.dataset import Dataset
 from core.models.document import Document
+from core.pagination import Page, Pagination
 from repositories.document_repository import DocumentRepository
-from services.base_service import BaseService
-from services.dataset_service import DatasetService
-from services.usage_service import UsageService
+from .base_service import BaseService
+from .dataset_service import DatasetService
+from .usage_service import UsageService
 
 class DocumentService(BaseService):
 
@@ -28,36 +29,50 @@ class DocumentService(BaseService):
 
         return document
 
+    def get_for_tenant(self, *, document_id: UUID, tenant_id: UUID) -> Document:
+        document = self.documents.with_dataset(document_id)
+
+        if document is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found.")
+
+        if document.dataset.tenant_id != tenant_id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found.")
+
+        return document
+
     def by_dataset(self, dataset_id: UUID) -> list[Document]:
         return self.documents.by_dataset(dataset_id=dataset_id)
 
     def by_creator(self, user_id: UUID) -> list[Document]:
-        return self.documents.by_user(user_id=user_id)
+        return self.documents.by_creator(user_id=user_id)
 
-    def create(self, *, dataset: Dataset, uploaded_by: UUID, **data) -> Document:
+    def paginate_by_dataset( self, *, dataset_id: UUID, pagination: Pagination) -> Page[Document]:
+        return self.documents.paginate_by_dataset(dataset_id=dataset_id, pagination=pagination)
+
+    def create(self, *, dataset: Dataset, created_by: UUID, **data) -> Document:
         if not self.usage.require_document(dataset.tenant_id):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Document quota exceeded.")
 
-        document = Document(dataset_id=dataset.id, uploaded_by=uploaded_by, status=DocumentStatus.PENDING, **data)
+        document = Document(dataset_id=dataset.id, created_by=created_by, status=DocumentStatus.PENDING, **data)
 
         self.documents.add(document)
-        self.usage.record_document( tenant_id=dataset.tenant_id)
+        self.usage.record_document(tenant_id=dataset.tenant_id)
 
         self.db.commit()
         self.db.refresh(document)
 
         self._refresh_dataset(dataset)
-        self._log_created( actor_id=uploaded_by, document=document)
+        self._log_created(actor_id=created_by, document=document)
 
         return document
 
     def mark_processing(self, document: Document) -> Document:
-        self.documents.update(document, status=DocumentStatus.PROCESSING)
+        self.documents.change_status(document=document, status=DocumentStatus.PROCESSING)
 
         return self.commit_refresh(document)
 
-    def mark_ready( self, *, document: Document, rows: int, columns: int) -> Document:
-        self.documents.update(document, status=DocumentStatus.READY, rows_count=rows, columns_count=columns)
+    def mark_ready(self, *, document: Document, rows: int, columns: int) -> Document:
+        self.documents.update(document, status=DocumentStatus.READY, rows_count=rows, columns_count=columns, error_message=None)
 
         self.db.commit()
         self.db.refresh(document)
@@ -76,18 +91,21 @@ class DocumentService(BaseService):
 
     def delete(self, *, document: Document, actor_id: UUID) -> None:
         dataset = document.dataset
+        dataset_id = dataset.id
+        document_id = document.id
 
-
+        self.documents.delete(document)
         self.db.commit()
 
         self._refresh_dataset(dataset)
-        self._log_deleted(actor_id=actor_id, dataset_id=dataset.id, document_id=document.id)
+
+        self._log_deleted(actor_id=actor_id, dataset_id=dataset_id, document_id=document_id)
 
     def _refresh_dataset(self, dataset: Dataset) -> None:
         documents = self.documents.by_dataset(dataset_id=dataset.id)
-
         rows = sum(document.rows_count or 0 for document in documents)
-        columns = max((document.columns_count or 0 for document in documents), default=0)
+
+        columns = max((document.columns_count or 0  for document in documents), default=0)
 
         self.datasets.update_statistics(dataset=dataset, documents_count=len(documents), rows_count=rows, columns_count=columns)
 

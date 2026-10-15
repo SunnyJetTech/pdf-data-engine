@@ -21,7 +21,8 @@ class Payment(BaseModel):
     reference: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     transaction_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     status: Mapped[PaymentStatus] = mapped_column(Enum(PaymentStatus), default=PaymentStatus.PENDING, nullable=False)
-    
+    pricing_plan_id: Mapped[int] = mapped_column(ForeignKey("pricing_plans.id", ondelete="RESTRICT"), nullable=False, index=True)
+
     tenant: Mapped["Tenant"] = relationship(back_populates="payments")
     subscription: Mapped["Subscription | None"] = relationship(back_populates="payments")
 

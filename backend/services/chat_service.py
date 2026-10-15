@@ -7,6 +7,7 @@ from core.models.chat_session import ChatSession
 from core.models.dataset import Dataset
 from repositories.chat_session_repository import ChatSessionRepository
 from services.base_service import BaseService
+from services.dataset_service import DatasetService
 
 class ChatService(BaseService):
 
@@ -14,6 +15,7 @@ class ChatService(BaseService):
         super().__init__(db)
 
         self.sessions = ChatSessionRepository(db)
+        self.datasets = DatasetService(db)
 
     def get(self, session_id: UUID) -> ChatSession:
         session = self.sessions.get(session_id)
@@ -100,3 +102,37 @@ class ChatService(BaseService):
             target_type="chat_session",
             target_id=session.id,
         )
+        
+    def get_for_tenant(self, *, session_id: UUID, tenant_id: UUID) -> ChatSession:
+        session = self.sessions.with_messages(session_id)
+
+        if session is None or session.dataset.tenant_id != tenant_id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chat session not found.")
+
+        return session
+    
+    def get_for_tenant( self, *, session_id: UUID, tenant_id: UUID) -> ChatSession:
+        session = self.sessions.with_messages(session_id)
+
+        if session is None or session.dataset.tenant_id != tenant_id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chat session not found.")
+
+        return session
+
+
+    def by_dataset_for_tenant(self, *, dataset_id: UUID, tenant_id: UUID) -> list[ChatSession]:
+        dataset = self.datasets.get(dataset_id)
+
+        if dataset.tenant_id != tenant_id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dataset not found.")
+
+        return self.sessions.by_dataset(dataset_id)
+
+
+    def create_for_tenant(self, *, actor_id: UUID, tenant_id: UUID, dataset_id: UUID, title: str | None = None) -> ChatSession:
+        dataset = self.datasets.get(dataset_id)
+
+        if dataset.tenant_id != tenant_id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dataset not found.")
+
+        return self.create(actor_id=actor_id, dataset=dataset, title=title)

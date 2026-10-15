@@ -79,7 +79,7 @@ class Settings(BaseSettings):
     # Middleware / API protection
     RATE_LIMIT_ENABLED: bool = True
     
-    # AI
+        # AI
     OPENAI_API_KEY: SecretStr
     OPENAI_CHAT_MODEL: str = "gpt-4.1-mini"
     OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"
@@ -87,6 +87,22 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: SecretStr
     GEMINI_EMBEDDING_MODEL: str = "gemini-embedding-2"
     GEMINI_EMBEDDING_DIMENSIONS: int = 768
+
+    # Payments
+    PAYSTACK_SECRET_KEY: SecretStr
+    PAYSTACK_PUBLIC_KEY: SecretStr
+    PAYSTACK_CALLBACK_URL: str
+
+    FLUTTERWAVE_SECRET_KEY: SecretStr
+    FLUTTERWAVE_PUBLIC_KEY: SecretStr
+    FLUTTERWAVE_WEBHOOK_SECRET: SecretStr
+    FLUTTERWAVE_CALLBACK_URL: str
+
+    STRIPE_SECRET_KEY: SecretStr
+    STRIPE_PUBLISHABLE_KEY: SecretStr
+    STRIPE_WEBHOOK_SECRET: SecretStr
+    STRIPE_CALLBACK_URL: str
+    STRIPE_CANCEL_URL: str
 
     # Derived settings
     @property

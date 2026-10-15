@@ -1,0 +1,259 @@
+# DataSage Backend — Project Handover and Continuation Instructions
+
+You are continuing development of my existing **DataSage multi-tenant SaaS backend**. I will provide the current codebase. Treat that codebase as the source of truth.
+
+Your responsibility is to **inspect the existing implementation, identify what is already complete, fix genuine integration gaps, and continue development from the current stopping point**. Do not restart the project or redesign everything from scratch.
+
+## 1. How we should work
+
+Follow these rules throughout the project:
+
+1. Inspect the actual files before proposing or writing changes.
+2. Never invent models, methods, repositories, schemas, provider interfaces, configuration settings, or directory structures that do not exist. If something is missing, explain the gap and implement it only when justified.
+3. Preserve working code and existing naming conventions wherever possible.
+4. Follow the architecture:
+   - Models
+   - Repositories
+   - Services
+   - Routers
+5. Keep business logic in services, database access in repositories, and HTTP concerns in routers.
+6. Keep tenant isolation and authorization checks consistent throughout the API.
+7. Avoid unnecessary abstractions and do not create separate services for every repository or model without a clear reason.
+8. Do not change shared foundational classes or refactor unrelated modules until their usages have been audited.
+9. When reviewing a file, give a clear decision: **KEEP, MODIFY, DELETE, or HOLD**, with a concise explanation.
+10. When asked to provide a corrected file, provide the complete file, not an isolated fragment, and ensure its imports and method calls match the actual codebase.
+11. Avoid excessive explanations and repeated architectural discussions. We have already spent considerable time reviewing this project and need to move forward systematically.
+12. Maintain continuity across files. Keep track of completed work, unresolved issues, and the next file to review.
+
+## 2. Project architecture and existing decisions
+
+DataSage is a multi-tenant data platform with document ingestion, datasets, search, AI/chat, API keys, webhooks, usage/quota management, subscriptions, and payments.
+
+The backend already contains models, repositories, services, schemas, authentication, and some router implementations.
+
+The intended request flow is:
+
+`Router → Service → Repository → Model/Database`
+
+External integrations belong in their appropriate services. Background jobs should use independent database sessions rather than request-scoped sessions.
+
+Use the existing FastAPI, SQLAlchemy, Pydantic, PostgreSQL, and other project dependencies. Do not introduce a new framework without a compelling reason.
+
+## 3. Work already reviewed
+
+The following areas have been reviewed or partially implemented. Verify the actual files before changing anything.
+
+- **Authentication:** `AuthService` handles login, logout, refresh tokens, password changes and resets, email verification, and session revocation.
+- **Users:** `UserService` supports user lookup and account/password operations. The `/users/me` router exists.
+- **Tenants:** `TenantService` supports tenant lookup, updates, ownership changes, activation, suspension, archival, and deletion.
+- **Tenant members:** Membership lookup and listing are implemented. Tenant-scoped read routes have been planned.
+- **API keys:** `APIKeyService` creates, authenticates, rotates, activates, revokes, and deletes keys. Plaintext keys should only be returned when initially created or rotated.
+- **Webhooks:** `WebhookService` manages webhook configuration, encrypted secrets, activation, and signature operations. `WebhookDeliveryService` manages delivery history and retries.
+- **Datasets:** `DatasetService` supports dataset CRUD-related operations, archival/restoration, statistics, usage, and quota checks. Its create-schema contract needs verification.
+- **Processing jobs:** A `ProcessingJobService` was introduced to wrap the existing repository, and read-only job routes were planned.
+- **Documents:** `DocumentService` and `DocumentRepository` handle document operations and processing state. Verify that creation uses the correct `created_by` field and that deletion actually deletes the record.
+- **Search:** `SearchService` owns search, context retrieval, search history, and saved-search operations. Saved-search endpoints belong in `search.py`; do not create a redundant router without a reason.
+- **Chat:** `ChatService` manages sessions, while `ChatMessageService` manages messages. Tenant ownership must be checked through the associated dataset.
+- **AI:** `AIService`, prompt-building, conversation memory, and tool execution have been reviewed. The current codebase's actual provider/tool contracts must be verified before extending them.
+- **Exports:** An existing `ExportService` is oriented toward tool execution and writes files locally. Do not invent export models, repositories, or download URLs.
+- **Usage and quotas:** Read-only current-tenant usage and quota endpoints have been planned. Administrative mutations should remain protected.
+- **Subscriptions:** `SubscriptionService` handles subscription records and plan changes. Public mutation routes must be coordinated with payment processing.
+- **Payments:** `PaymentService` exists and handles local payment records and subscription fulfillment. We were about to improve its provider integration and payment router.
+
+Some legacy modules have already been deleted, including Mongo-specific repositories/utilities, a duplicate repository, an export repository, and an upload service. Do not recreate deleted files automatically.
+
+## 4. Current stopping point: payment integrations
+
+This is the immediate area to continue.
+
+We discussed supporting **three payment providers**, allowing a customer to choose the provider most suitable for them. Paystack is the first provider whose integration code has been supplied.
+
+The supplied `PaystackService` has these responsibilities:
+
+- Initialize a transaction through Paystack.
+- Verify a transaction using its reference.
+- Validate Paystack webhook signatures using HMAC-SHA512.
+- Determine whether a provider response represents a successful payment.
+- Extract the checkout authorization URL.
+
+The supplied implementation uses `requests` and `core.config.settings`, with settings including `PAYSTACK_SECRET_KEY` and `PAYSTACK_CALLBACK_URL`. The URL in the pasted code was Markdown-formatted and must be corrected to the actual string `https://api.paystack.co`.
+
+Do not assume all configuration settings, models, or provider enums are correct until you inspect the files.
+
+### First: audit the payment implementation
+
+Inspect the actual:
+
+- `PaymentService`
+- `PaymentRepository`
+- Payment model and status definitions
+- `PricingPlan` model and related services/repositories
+- `PaymentProvider` enum or equivalent
+- Subscription model and `SubscriptionService`
+- Existing provider integrations and configuration
+- Payment request/response schemas
+- Existing payment and webhook routers
+- Application router registration and dependencies
+
+Trace the complete flow and identify missing contracts before making changes.
+
+The existing `PaymentService` includes methods similar to:
+
+- `create(...)`
+- `by_id(...)`
+- `by_reference(...)`
+- `latest(...)`
+- `history(...)`
+- `mark_success(...)`
+- `mark_failed(...)`
+- `cancel(...)`
+- `verify_success(...)`
+- `total_successful_amount(...)`
+- `successful_count(...)`
+
+Confirm these methods against the codebase. Do not replace them with an invented interface.
+
+### Second: support three payment providers
+
+After the audit, implement three provider-specific service files, using existing directory conventions where possible.
+
+Paystack is the first. Recommend two other providers based on the actual product's target markets, currency requirements, existing dependencies, and configuration. If the second and third providers have not yet been chosen, recommend suitable options and state the trade-offs before implementing them.
+
+Each provider service should handle provider-specific operations, including where applicable:
+
+- Transaction initialization
+- Transaction verification
+- Webhook signature verification
+- Provider response normalization
+- Extraction of checkout or authorization URLs
+- Provider-specific error handling
+
+Do not duplicate database persistence or subscription activation logic inside each provider service.
+
+Use a small shared interface or adapter only if it genuinely simplifies consistent provider selection. Avoid an elaborate payment abstraction framework.
+
+### Third: update `PaymentService`
+
+The central payment service should coordinate the chosen provider and existing database services.
+
+It should:
+
+1. Resolve the current tenant and requested plan using trusted server-side records.
+2. Determine the amount and currency from the stored plan, never from a client-supplied amount.
+3. Generate a unique payment reference.
+4. Create a pending local payment record.
+5. Initialize the transaction with the selected provider.
+6. Return the reference and checkout URL required by the frontend.
+7. Verify the provider transaction and validate its reference, amount, currency, and successful status.
+8. Fulfill a successful payment idempotently.
+9. Coordinate subscription activation or plan changes through the existing `SubscriptionService`.
+10. Handle failed, cancelled, pending, and duplicate verification attempts correctly.
+
+Inspect the actual pricing model and payment schema before implementing this flow.
+
+### Fourth: update the payment router
+
+Implement the endpoints supported by the actual contracts. The intended public API includes:
+
+- `POST /payments/initialize` — authenticated tenant initializes a payment for a valid plan and selected provider.
+- `GET /payments/verify/{reference}` — verifies a payment belonging to the current tenant.
+- `GET /payments/current/latest` — latest payment for the current tenant.
+- `GET /payments/current/history` — payment history for the current tenant.
+- `GET /payments/current/total-successful` — total successful payment amount.
+- `GET /payments/current/successful-count` — count of successful payments.
+- `GET /payments/{payment_id}` — fetch a payment only if it belongs to the current tenant.
+
+Static routes must be registered before dynamic routes where necessary.
+
+Use request schemas for initialization rather than accepting arbitrary amounts as query parameters. Never allow the client to mark its own payment successful.
+
+### Fifth: implement webhook handling
+
+Inspect the existing webhook router and provider infrastructure before deciding whether Paystack's payment webhook should be placed there or in a dedicated router.
+
+For Paystack:
+
+- Read the raw request body.
+- Verify the signature before trusting the payload.
+- Process successful payment events idempotently.
+- Verify payment details before activating subscriptions.
+- Handle duplicate and out-of-order events safely.
+- Return appropriate acknowledgements.
+
+The webhook must not require a normal browser login, but it must be secured through the provider's signature verification and appropriate event validation.
+
+### Sixth: tests and configuration
+
+Add or update tests for:
+
+- Provider selection
+- Successful and failed initialization
+- Invalid or repeated references
+- Incorrect amounts or currencies
+- Invalid webhook signatures
+- Duplicate webhook events
+- Tenant ownership checks
+- Subscription fulfillment exactly once
+- Provider timeouts and malformed responses
+
+Use mocked provider HTTP calls for automated tests. Do not make real payment requests in tests.
+
+Update settings and dependency declarations only where necessary. Never expose secret keys in responses or logs.
+
+## 5. Other known integration gaps
+
+Keep these in the backlog and address them in order after payments, unless inspection reveals a blocker:
+
+1. **Quota API mismatch:** Previous code references methods such as `require_chat()` and `require_dataset()`, but the supplied `QuotaService` appeared to expose `ensure_not_locked()` and `update_limits()` instead. Verify the current files and resolve the mismatch without guessing at the intended quota rules.
+2. **Dataset creation contract:** `DatasetService.create()` appeared to require a `slug`, while `DatasetCreate` did not supply one. Inspect `DatasetRepository` and current slug-generation behavior.
+3. **Document model cleanup:** Duplicate `created_by` declarations and a potentially dangerous `delete-orphan` relationship were identified. Verify the actual model and migration implications.
+4. **Tenant-scoped queries:** Some repositories fetch records by dataset/document before filtering by tenant in services. Prefer properly scoped queries where appropriate.
+5. **Transactions and time zones:** Review `datetime.utcnow()`, commit/rollback boundaries, and idempotency after completing the current payment work.
+6. **Router registration:** Confirm every intended router is included in the application and avoid duplicate or obsolete routes.
+
+Do not try to fix every backlog item at once.
+
+## 6. Router roadmap
+
+The planned router roadmap is:
+
+1. Health
+2. Authentication
+3. Users
+4. Tenants
+5. Tenant members
+6. API keys
+7. Webhooks
+8. Datasets
+9. Documents
+10. Processing jobs
+11. Search, including saved searches
+12. Search history
+13. Chat sessions
+14. Chat messages
+15. AI
+16. Exports
+17. Usage
+18. Quotas
+19. Subscriptions
+20. Payments
+21. Admin
+
+The old routers from an earlier PDF-oriented codebase are legacy references, not the API specification for DataSage. Build or adapt DataSage routes based on the actual services, schemas, and product requirements.
+
+The payment work is the current focus; afterward, continue with the next unfinished router, likely `admin.py`, after inspecting its actual service and authorization contracts.
+
+## 7. Your first response after receiving the codebase
+
+Do not immediately rewrite files.
+
+First:
+
+1. Identify the project structure and relevant payment files.
+2. Read the actual payment, pricing-plan, subscription, provider, configuration, schema, and router code.
+3. Report which payment components already exist, which are missing, and any contract mismatches.
+4. Recommend the three-provider setup based on the project's actual requirements.
+5. Give a short implementation sequence.
+6. Start implementing the first concrete change once the contracts are clear.
+
+**The goal is to continue from the existing codebase, not restart the design. Make decisions, preserve continuity, and move forward file by file.**

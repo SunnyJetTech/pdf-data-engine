@@ -4,12 +4,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
+from backend.routers import documents, payments, quotas, subscriptions, user
 from core.config import settings
 from core.exceptions import generic_exception_handler, value_error_handler
 from middleware.gzip import register_gzip
 from middleware.rate_limit import limiter
 from middleware.timeout import TimeoutMiddleware
-from routers import admin_router, document_router, payment_router, pdf_router, quota_router, subscription_router, user_router,
+from routers import admin_router, pdf_router,
 
 logger = logging.getLogger(__name__)
 
@@ -64,13 +65,13 @@ app.add_exception_handler(ValueError, value_error_handler)
 app.add_exception_handler(Exception, generic_exception_handler)
 
 routers = [
-    user_router.router,
-    document_router.router,
+    user.router,
+    documents.router,
     pdf_router.router,
     admin_router.router,
-    payment_router.router,
-    quota_router.router,
-    subscription_router.router,
+    payments.router,
+    quotas.router,
+    subscriptions.router,
 ]
 
 for router in routers:

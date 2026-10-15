@@ -1,9 +1,10 @@
-from typing import Generic, Optional, TypeVar
-from pydantic.generics import GenericModel
+from __future__ import annotations
+from typing import Any
+from pydantic import BaseModel, ConfigDict
 
-T = TypeVar("T")
+class APIResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore")
 
-class APIResponse(GenericModel, Generic[T]):
-    status: str
-    message: Optional[str] = None
-    data: Optional[T] = None
+    success: bool = True
+    message: str | None = None
+    data: Any = None

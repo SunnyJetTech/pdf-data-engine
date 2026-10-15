@@ -40,10 +40,11 @@ class SearchHistoryRepository(BaseRepository[SearchHistory]):
         
         return list(self.db.scalars(stmt).all())
 
-    def delete_by_user(self, *, user_id: UUID) -> None:
+    def delete_by_user(self, *, user_id: UUID) -> int:
         stmt = delete(SearchHistory).where(SearchHistory.user_id == user_id)
+        result = self.db.execute(stmt)
 
-        self.db.execute(stmt)
+        return result.rowcount or 0
         
     def count_by_dataset(self, dataset_id: UUID) -> int:
         stmt = select(func.count()).select_from(SearchHistory).where(SearchHistory.dataset_id == dataset_id)

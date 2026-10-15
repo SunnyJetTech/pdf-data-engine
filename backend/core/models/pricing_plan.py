@@ -23,4 +23,4 @@ class PricingPlan(BaseModel):
     priority_processing: Mapped[bool] = mapped_column( Boolean, default=False, nullable=False)
     features: Mapped[dict] = mapped_column( JSON, default=dict, nullable=False)
     
-    subscriptions: Mapped[list["Subscription"]] = relationship( back_populates="plan", cascade="all, delete-orphan")
+    subscriptions: Mapped[list["Subscription"]] = relationship(back_populates="plan", cascade="all, delete-orphan")
